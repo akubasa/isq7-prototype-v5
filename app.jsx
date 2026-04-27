@@ -750,22 +750,34 @@ const ActivityFeed = ({ q, go }) => {
     <div className="dash-feed">
       <header className="dash-feed-head">
         <h2>{q.co} — {titleSub}</h2>
-        <span className={`dash-pill ${headPill.tone}`}>{headPill.label}</span>
+        <div style={{display:"flex", alignItems:"center", gap:12}}>
+          <span className={`dash-pill ${headPill.tone}`}>{headPill.label}</span>
+          <button className="btn sm" onClick={function(){ go(q.status === "sent" ? "sent" : "inquiry", q.id); }}>
+            Vollansicht öffnen <Icon n="arr" s={13}/>
+          </button>
+        </div>
       </header>
       <div className="dash-events">
+        {/* 1. Email received */}
         <FeedEvent avatar={senderInitials} avatarKind="purple" name={q.email} time={t}>
           <div><b>Betreff:</b> {q.emailSubject}</div>
           <div style={{marginTop:8, color:"var(--muted)"}}>{q.emailBody.split("\n\n").slice(0,2).join(" ").slice(0,220)}...</div>
         </FeedEvent>
 
+        {/* 2. AI parsed */}
         <FeedEvent avatar="AI" avatarKind="ai" name="isq7" badge="PARSED" badgeKind="parsed" time={`${t} (+2.3s)`}>
           <div><b>Extrahiert:</b> {q.summary}</div>
           <div><b>Firma:</b> {q.co} · <b>Priorität:</b> {priority} · <b>Est. Revenue:</b> {fmt(q.value)}</div>
         </FeedEvent>
 
+        {/* 3. Auto-reply or VIP draft */}
         {q.vip ? (
           <FeedEvent avatar="!" avatarKind="ai" name="VIP-Modus" badge="DRAFT" badgeKind="parsed" time={`${t} (+5s)`}>
             <div>VIP-Anfrage erkannt - <b>keine Auto-Reply</b> gesendet. Entwurf liegt zur manuellen Freigabe bereit.</div>
+            <div className="feed-buttons">
+              <button className="btn primary sm" onClick={function(){ go("inquiry", q.id); }}>Entwurf öffnen</button>
+              <button className="btn sm" onClick={function(){ go("price", q.id); }}>Preis ansehen</button>
+            </div>
           </FeedEvent>
         ) : (
           <FeedEvent avatar="SY" avatarKind="sy" name="Auto-Response" badge="SENT" badgeKind="sent" time={`${t} (+28s)`}>
@@ -773,20 +785,70 @@ const ActivityFeed = ({ q, go }) => {
           </FeedEvent>
         )}
 
-        <FeedEvent avatar="AI" avatarKind="ai" name="isq7" badge="PRICING" badgeKind="pricing" time={`${t} (+52s)`}>
-          <div><b>Empfohlener Preis:</b> €{q.rate}/Nacht · <b>Gesamt:</b> {fmt(totalAmt)}</div>
-          <div><b>Markt:</b> Wettbewerber bei €{minPrice}-{maxPrice}</div>
-          <div><b>Event:</b> {q.event.name} ({q.event.dates})</div>
-        </FeedEvent>
+        {/* 4. AI pricing — only for non-VIP (VIP shows draft instead) */}
+        {!q.vip && (
+          <FeedEvent avatar="AI" avatarKind="ai" name="isq7" badge="PRICING" badgeKind="pricing" time={`${t} (+52s)`}>
+            <div><b>Empfohlener Preis:</b> €{q.rate}/Nacht · <b>Gesamt:</b> {fmt(totalAmt)}</div>
+            <div><b>Markt:</b> Wettbewerber bei €{minPrice}-{maxPrice}</div>
+            <div><b>Event:</b> {q.event.name} ({q.event.dates})</div>
+          </FeedEvent>
+        )}
 
-        <FeedEvent avatar="SY" avatarKind="sy" name="PDF generiert" time={`${t} (+58s)`}>
-          <div>Angebot <b>{proposalNum}.pdf</b> erstellt (3 Seiten). Bereit zur Freigabe.</div>
-          <div className="feed-buttons">
-            <button className="btn primary sm">PDF Vorschau</button>
-            <button className="btn green sm" onClick={() => go("sent", q.id)}>Freigeben & Senden</button>
-            <button className="btn sm" onClick={() => go("price", q.id)}>Preis anpassen</button>
-          </div>
-        </FeedEvent>
+        {/* 5. PDF generated — only for non-VIP */}
+        {!q.vip && q.status === "new" && (
+          <FeedEvent avatar="SY" avatarKind="sy" name="PDF generiert" time={`${t} (+58s)`}>
+            <div>Angebot <b>{proposalNum}.pdf</b> erstellt (3 Seiten). Bereit zur Freigabe.</div>
+            <div className="feed-buttons">
+              <button className="btn primary sm">PDF Vorschau</button>
+              <button className="btn green sm" onClick={function(){ go("sent", q.id); }}>Freigeben & Senden</button>
+              <button className="btn sm" onClick={function(){ go("price", q.id); }}>Preis anpassen</button>
+            </div>
+          </FeedEvent>
+        )}
+
+        {/* PRICED status: Human is reviewing/adjusting price */}
+        {q.status === "priced" && (
+          <>
+            <FeedEvent avatar="AB" avatarKind="purple" name="Andreas Bauer" badge="REVIEW" badgeKind="parsed" time={`${t} (+3min)`}>
+              <div>Hat den AI-Vorschlag geöffnet. Preis von €{q.rate} auf <b>€{q.rate}</b> bestätigt.</div>
+              <div style={{marginTop:6, color:"var(--muted)"}}>Anpassungen: keine. PDF wird mit angepassten Werten neu generiert.</div>
+            </FeedEvent>
+            <FeedEvent avatar="SY" avatarKind="sy" name="PDF aktualisiert" time={`${t} (+4min)`}>
+              <div>Angebot <b>{proposalNum}.pdf</b> mit menschlich bestätigtem Preis. Bereit zum Versand.</div>
+              <div className="feed-buttons">
+                <button className="btn primary sm">PDF Vorschau</button>
+                <button className="btn green sm" onClick={function(){ go("sent", q.id); }}>Freigeben & Senden</button>
+                <button className="btn sm" onClick={function(){ go("price", q.id); }}>Erneut anpassen</button>
+              </div>
+            </FeedEvent>
+          </>
+        )}
+
+        {/* SENT status: Approved + sent + follow-ups */}
+        {q.status === "sent" && (
+          <>
+            <FeedEvent avatar="AB" avatarKind="purple" name="Andreas Bauer" badge="APPROVED" badgeKind="sent" time={q.sentAt || `${t} (+5min)`}>
+              <div>Angebot freigegeben und an {q.email} versendet.</div>
+              <div style={{marginTop:6, color:"var(--muted)"}}>Total: <b>{fmt(totalAmt)}</b> · Versendet von {q.sentBy || "Andreas Bauer"}</div>
+            </FeedEvent>
+            {(q.followUps || []).filter(function(fu){ return fu.done; }).map(function(fu, i){
+              return (
+                <FeedEvent key={"fu"+i} avatar="SY" avatarKind="sy" name={fu.label} badge={fu.at} badgeKind="sent" time={fu.at}>
+                  <div>{fu.label}</div>
+                </FeedEvent>
+              );
+            })}
+            <div style={{marginTop:8, padding:"14px 18px", borderRadius:12, background:"color-mix(in srgb,var(--green) 6%,var(--input))", border:"1px solid color-mix(in srgb,var(--green) 22%,var(--panel-border))", fontSize:13.5}}>
+              <div style={{fontFamily:"var(--font-m)", fontSize:11, color:"var(--green)", letterSpacing:".08em", textTransform:"uppercase", marginBottom:6}}>Aktueller Stand</div>
+              <div>Wartet auf Kundenantwort. Nächster automatischer Touch: {(q.followUps||[]).find(function(fu){ return !fu.done; })?.label || "—"}.</div>
+              <div className="feed-buttons">
+                <button className="btn primary sm">PDF erneut senden</button>
+                <button className="btn sm">Follow-up jetzt</button>
+                <button className="btn sm" onClick={function(){ go("sent", q.id); }}>Vollansicht</button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
