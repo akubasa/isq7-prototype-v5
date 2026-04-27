@@ -617,10 +617,10 @@ const App = () => {
 
   let S;
   switch (step) {
-    case "inbox":   S = <Inbox inquiries={inquiries} go={go}/>; break;
-    case "inquiry": S = active ? <Inquiry q={active} go={go}/> : <Inbox inquiries={inquiries} go={go}/>; break;
-    case "price":   S = active ? <Pricing q={active} go={go} updateInquiry={updateInquiry}/> : <Inbox inquiries={inquiries} go={go}/>; break;
-    case "sent":    S = active ? <Sent q={active} go={go}/> : <Inbox inquiries={inquiries} go={go}/>; break;
+    case "inbox":   S = <Inbox inquiries={inquiries} go={go} updateInquiry={updateInquiry}/>; break;
+    case "inquiry": S = active ? <Inquiry q={active} go={go}/> : <Inbox inquiries={inquiries} go={go} updateInquiry={updateInquiry}/>; break;
+    case "price":   S = active ? <Pricing q={active} go={go} updateInquiry={updateInquiry}/> : <Inbox inquiries={inquiries} go={go} updateInquiry={updateInquiry}/>; break;
+    case "sent":    S = active ? <Sent q={active} go={go}/> : <Inbox inquiries={inquiries} go={go} updateInquiry={updateInquiry}/>; break;
     case "stats":   S = <Stats/>; break;
     case "config":  S = <Config/>; break;
     case "archive": S = activeArchiveId ? <ArchiveDetail id={activeArchiveId} go={go} setActiveArchiveId={setActiveArchiveId}/> : <Archive go={go} setActiveArchiveId={setActiveArchiveId}/>; break;
@@ -731,6 +731,8 @@ const PDFPreviewModal = ({ q, open, onClose }) => {
   const validDate = new Date();
   validDate.setDate(validDate.getDate() + 14);
   const validStr = validDate.toLocaleDateString("de-DE", { day:"2-digit", month:"long", year:"numeric" });
+  const today = new Date().toLocaleDateString("de-DE", { day:"2-digit", month:"long", year:"numeric" });
+  const period = q.event && q.event.dates ? q.event.dates : q.summary.split("·").slice(-1)[0].trim();
 
   const handleBgClick = function(e){ if (e.target === e.currentTarget) onClose(); };
 
@@ -739,56 +741,69 @@ const PDFPreviewModal = ({ q, open, onClose }) => {
       <div className="modal pdf-modal" style={{maxHeight:"none"}}>
         <button className="pdf-modal-x" onClick={onClose} title="Schließen">×</button>
         <div className="pdf-paper">
-          <div className="pdf-paper-head">
-            <div className="left">
+          <div className="pdf-paper-inner">
+            <div className="pdf-paper-head">
               <h1>The Lakeview Vienna</h1>
-              <div className="sub">Grandview Hotel Group</div>
+              <div className="sub">Grandview Hotel Group · Wien</div>
             </div>
-            <div className="right">
-              <div className="label">Angebot</div>
-              <div className="num">{proposalNum}</div>
+
+            <div className="pdf-paper-meta">
+              <div className="col">
+                <span className="label">Angebot</span>
+                <span className="num">{proposalNum}</span>
+              </div>
+              <div className="col">
+                <span className="label">Zeitraum</span>
+                <span className="val">{period}</span>
+              </div>
+              <div className="col r">
+                <span className="label">Datum</span>
+                <span className="val">{today}</span>
+              </div>
             </div>
+
+            <div className="pdf-paper-greet">{greeting},</div>
+            <p>vielen Dank für Ihr Vertrauen{q.intent === "VIP Protocol" ? " und Ihre erneute Anfrage" : " und Ihre Anfrage"}. Wir freuen uns, Ihnen für den genannten Zeitraum das folgende, persönlich kuratierte Angebot vorzulegen.</p>
+
+            <table className="pdf-paper-table">
+              <thead>
+                <tr>
+                  <th>Leistung</th>
+                  <th className="amt">Betrag</th>
+                </tr>
+              </thead>
+              <tbody>
+                {q.lines.map(function(line, i){
+                  const isDiscount = line.v < 0;
+                  return (
+                    <tr key={i}>
+                      <td>{line.k}</td>
+                      <td className={"amt" + (isDiscount ? " discount" : "")}>{isDiscount ? "-" : ""}{fmt(Math.abs(line.v))}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <div className="pdf-paper-total">
+              <span className="label">Gesamt</span>
+              <span className="val">{fmt(totalAmt)}</span>
+            </div>
+
+            <div className="pdf-paper-body-after">
+              <p>Alle Preise verstehen sich zuzüglich gesetzlicher Mehrwertsteuer. {q.intent === "VIP Protocol" ? "Selbstverständlich kümmert sich unser Team persönlich um Protokoll, Ankunft und alle individuellen Wünsche." : "Inbegriffen sind die mit Ihnen besprochenen Leistungen sowie unser persönlicher Service durch das Group-Sales-Team."}</p>
+              <p>Dieses Angebot ist <em>gültig bis {validStr}</em>. Für Rückfragen oder Anpassungen stehe ich Ihnen jederzeit persönlich zur Verfügung.</p>
+            </div>
+
+            <div className="pdf-paper-sig">
+              <span className="closing">Mit den herzlichsten Grüßen aus Wien</span>
+              <span className="name">Andreas Bauer</span>
+              <div className="role">Director · Group Sales</div>
+              <div className="contact">+43 1 234 5678 · andreas.bauer@lakeview-vienna.at</div>
+            </div>
+
+            <div className="pdf-paper-foot">The Lakeview Vienna · Grandview Hotel Group · {proposalNum}</div>
           </div>
-
-          <p>{greeting},</p>
-          <p>vielen Dank für Ihre Anfrage vom {timeOf(q.id)} bezüglich {q.intent === "VIP Protocol" ? "Ihrer Ehrengäste-Reservierung" : q.summary.split("·")[0].trim()}. Wir freuen uns, Ihnen folgendes Angebot vorzulegen:</p>
-
-          <table className="pdf-paper-table">
-            <thead>
-              <tr>
-                <th>Position</th>
-                <th className="amt">Betrag</th>
-              </tr>
-            </thead>
-            <tbody>
-              {q.lines.map(function(line, i){
-                const isDiscount = line.v < 0;
-                return (
-                  <tr key={i}>
-                    <td>{line.k}</td>
-                    <td className={"amt" + (isDiscount ? " discount" : "")}>{isDiscount ? "-" : ""}{fmt(Math.abs(line.v))}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          <div className="pdf-paper-total">
-            <span className="label">Gesamt (zzgl. MwSt.)</span>
-            <span className="val">{fmt(totalAmt)}</span>
-          </div>
-
-          <p style={{marginTop:24}}>Dieser Preis spiegelt unsere aktuelle Marktposition für den angefragten Zeitraum wider. Wir freuen uns auf eine erfolgreiche Zusammenarbeit{q.intent === "VIP Protocol" ? " und auf das wiederholte Vertrauen" : ""}.</p>
-          <p>Das Angebot ist gültig bis <b>{validStr}</b>. Für Rückfragen stehe ich Ihnen gerne zur Verfügung.</p>
-
-          <div className="pdf-paper-sig">
-            Mit freundlichen Grüßen<br/>
-            <b>Andreas Bauer</b><br/>
-            Director Group Sales · The Lakeview Vienna<br/>
-            +43 1 234 5678 · andreas.bauer@lakeview-vienna.at
-          </div>
-
-          <div className="pdf-paper-foot">The Lakeview Vienna · Grandview Hotel Group · {proposalNum}</div>
         </div>
       </div>
     </div>
@@ -809,7 +824,7 @@ const FeedEvent = ({ avatar, avatarKind, name, badge, badgeKind, time, children 
   </div>
 );
 
-const ActivityFeed = ({ q, go }) => {
+const ActivityFeed = ({ q, go, updateInquiry }) => {
   const [pdfOpen, setPdfOpen] = useState(false);
   const t = timeOf(q.id);
   const senderInitials = initialsOf(q);
@@ -821,6 +836,27 @@ const ActivityFeed = ({ q, go }) => {
   const proposalNum = "ANG-2026-" + String(((q.id.charCodeAt(0) * 137 + q.id.charCodeAt(1) * 41) % 9000) + 1000).slice(0,4);
   const headPill = HEAD_PILL[q.status] || HEAD_PILL.new;
   const titleSub = q.summary.split("·").slice(0,2).join(" ·").trim();
+
+  const approveAndSend = function(){
+    if (updateInquiry) {
+      const now = new Date();
+      const sentAt = "Heute · " + now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+      updateInquiry(q.id, {
+        status: "sent",
+        tag: "Gesendet",
+        tone: "green",
+        sentAt: sentAt,
+        sentBy: "Andreas Bauer",
+        followUps: q.followUps || [
+          { at:"T+0", label:"Angebot per E-Response gesendet", done:true },
+          { at:"T+4h", label:"Öffnungsbestätigung erwartet", done:false },
+          { at:"T+24h", label:"Automatische Erinnerung", done:false },
+          { at:"T+72h", label:"Eskalation an Sales-Manager", done:false },
+        ],
+      });
+    }
+    go("sent", q.id);
+  };
 
   return (
     <div className="dash-feed">
@@ -876,7 +912,7 @@ const ActivityFeed = ({ q, go }) => {
             <div>Angebot <b>{proposalNum}.pdf</b> erstellt (3 Seiten). Bereit zur Freigabe.</div>
             <div className="feed-buttons">
               <button className="btn primary sm" onClick={function(){ setPdfOpen(true); }}>PDF Vorschau</button>
-              <button className="btn green sm" onClick={function(){ go("sent", q.id); }}>Freigeben & Senden</button>
+              <button className="btn green sm" onClick={approveAndSend}>Freigeben & Senden</button>
               <button className="btn sm" onClick={function(){ go("price", q.id); }}>Preis anpassen</button>
             </div>
           </FeedEvent>
@@ -893,7 +929,7 @@ const ActivityFeed = ({ q, go }) => {
               <div>Angebot <b>{proposalNum}.pdf</b> mit menschlich bestätigtem Preis. Bereit zum Versand.</div>
               <div className="feed-buttons">
                 <button className="btn primary sm" onClick={function(){ setPdfOpen(true); }}>PDF Vorschau</button>
-                <button className="btn green sm" onClick={function(){ go("sent", q.id); }}>Freigeben & Senden</button>
+                <button className="btn green sm" onClick={approveAndSend}>Freigeben & Senden</button>
                 <button className="btn sm" onClick={function(){ go("price", q.id); }}>Erneut anpassen</button>
               </div>
             </FeedEvent>
@@ -931,7 +967,7 @@ const ActivityFeed = ({ q, go }) => {
   );
 };
 
-const Inbox = ({ inquiries, go }) => {
+const Inbox = ({ inquiries, go, updateInquiry }) => {
   const visible = ORDER.filter(function(id){ return inquiries[id]; });
   const [selectedId, setSelectedId] = useState(function(){
     var saved = localStorage.getItem("isq7s.dash-id");
@@ -973,7 +1009,7 @@ const Inbox = ({ inquiries, go }) => {
         </div>
       </aside>
       <main className="dash-main">
-        {active ? <ActivityFeed q={active} go={go}/> : (
+        {active ? <ActivityFeed q={active} go={go} updateInquiry={updateInquiry}/> : (
           <div className="dash-empty">
             <div>Keine Anfrage ausgewählt.</div>
             <div style={{marginTop:6, fontSize:12}}>Wähle eine aus der Liste.</div>
