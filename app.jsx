@@ -720,6 +720,81 @@ const initialsOf = (q) => {
   return q.co.slice(0,2).toUpperCase();
 };
 
+const PDFPreviewModal = ({ q, open, onClose }) => {
+  if (!open || !q) return null;
+  const proposalNum = "ANG-2026-" + String(((q.id.charCodeAt(0) * 137 + q.id.charCodeAt(1) * 41) % 9000) + 1000).slice(0,4);
+  const totalAmt = total(q);
+  const lastName = q.from.replace(/^Dr\.?\s+/i, "").split(/\s+/).slice(-1)[0];
+  const firstName = q.from.replace(/^Dr\.?\s+/i, "").split(/\s+/)[0];
+  const isHerr = /^(Markus|Andreas|Tobias|Roman|Philipp)/i.test(firstName) || q.from.includes("Herr");
+  const greeting = `Sehr geehrte${isHerr ? "r Herr" : " Frau"} ${lastName}`;
+  const validDate = new Date();
+  validDate.setDate(validDate.getDate() + 14);
+  const validStr = validDate.toLocaleDateString("de-DE", { day:"2-digit", month:"long", year:"numeric" });
+
+  const handleBgClick = function(e){ if (e.target === e.currentTarget) onClose(); };
+
+  return (
+    <div className="modal-bg" onClick={handleBgClick}>
+      <div className="modal pdf-modal" style={{maxHeight:"none"}}>
+        <button className="pdf-modal-x" onClick={onClose} title="Schließen">×</button>
+        <div className="pdf-paper">
+          <div className="pdf-paper-head">
+            <div className="left">
+              <h1>The Lakeview Vienna</h1>
+              <div className="sub">Grandview Hotel Group</div>
+            </div>
+            <div className="right">
+              <div className="label">Angebot</div>
+              <div className="num">{proposalNum}</div>
+            </div>
+          </div>
+
+          <p>{greeting},</p>
+          <p>vielen Dank für Ihre Anfrage vom {timeOf(q.id)} bezüglich {q.intent === "VIP Protocol" ? "Ihrer Ehrengäste-Reservierung" : q.summary.split("·")[0].trim()}. Wir freuen uns, Ihnen folgendes Angebot vorzulegen:</p>
+
+          <table className="pdf-paper-table">
+            <thead>
+              <tr>
+                <th>Position</th>
+                <th className="amt">Betrag</th>
+              </tr>
+            </thead>
+            <tbody>
+              {q.lines.map(function(line, i){
+                const isDiscount = line.v < 0;
+                return (
+                  <tr key={i}>
+                    <td>{line.k}</td>
+                    <td className={"amt" + (isDiscount ? " discount" : "")}>{isDiscount ? "-" : ""}{fmt(Math.abs(line.v))}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <div className="pdf-paper-total">
+            <span className="label">Gesamt (zzgl. MwSt.)</span>
+            <span className="val">{fmt(totalAmt)}</span>
+          </div>
+
+          <p style={{marginTop:24}}>Dieser Preis spiegelt unsere aktuelle Marktposition für den angefragten Zeitraum wider. Wir freuen uns auf eine erfolgreiche Zusammenarbeit{q.intent === "VIP Protocol" ? " und auf das wiederholte Vertrauen" : ""}.</p>
+          <p>Das Angebot ist gültig bis <b>{validStr}</b>. Für Rückfragen stehe ich Ihnen gerne zur Verfügung.</p>
+
+          <div className="pdf-paper-sig">
+            Mit freundlichen Grüßen<br/>
+            <b>Andreas Bauer</b><br/>
+            Director Group Sales · The Lakeview Vienna<br/>
+            +43 1 234 5678 · andreas.bauer@lakeview-vienna.at
+          </div>
+
+          <div className="pdf-paper-foot">The Lakeview Vienna · Grandview Hotel Group · {proposalNum}</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const FeedEvent = ({ avatar, avatarKind, name, badge, badgeKind, time, children }) => (
   <div className="feed-event">
     <div className={`feed-avatar ${avatarKind}`}>{avatar}</div>
@@ -735,6 +810,7 @@ const FeedEvent = ({ avatar, avatarKind, name, badge, badgeKind, time, children 
 );
 
 const ActivityFeed = ({ q, go }) => {
+  const [pdfOpen, setPdfOpen] = useState(false);
   const t = timeOf(q.id);
   const senderInitials = initialsOf(q);
   const totalAmt = total(q);
@@ -799,7 +875,7 @@ const ActivityFeed = ({ q, go }) => {
           <FeedEvent avatar="SY" avatarKind="sy" name="PDF generiert" time={`${t} (+58s)`}>
             <div>Angebot <b>{proposalNum}.pdf</b> erstellt (3 Seiten). Bereit zur Freigabe.</div>
             <div className="feed-buttons">
-              <button className="btn primary sm">PDF Vorschau</button>
+              <button className="btn primary sm" onClick={function(){ setPdfOpen(true); }}>PDF Vorschau</button>
               <button className="btn green sm" onClick={function(){ go("sent", q.id); }}>Freigeben & Senden</button>
               <button className="btn sm" onClick={function(){ go("price", q.id); }}>Preis anpassen</button>
             </div>
@@ -816,7 +892,7 @@ const ActivityFeed = ({ q, go }) => {
             <FeedEvent avatar="SY" avatarKind="sy" name="PDF aktualisiert" time={`${t} (+4min)`}>
               <div>Angebot <b>{proposalNum}.pdf</b> mit menschlich bestätigtem Preis. Bereit zum Versand.</div>
               <div className="feed-buttons">
-                <button className="btn primary sm">PDF Vorschau</button>
+                <button className="btn primary sm" onClick={function(){ setPdfOpen(true); }}>PDF Vorschau</button>
                 <button className="btn green sm" onClick={function(){ go("sent", q.id); }}>Freigeben & Senden</button>
                 <button className="btn sm" onClick={function(){ go("price", q.id); }}>Erneut anpassen</button>
               </div>
@@ -842,7 +918,7 @@ const ActivityFeed = ({ q, go }) => {
               <div style={{fontFamily:"var(--font-m)", fontSize:11, color:"var(--green)", letterSpacing:".08em", textTransform:"uppercase", marginBottom:6}}>Aktueller Stand</div>
               <div>Wartet auf Kundenantwort. Nächster automatischer Touch: {(q.followUps||[]).find(function(fu){ return !fu.done; })?.label || "—"}.</div>
               <div className="feed-buttons">
-                <button className="btn primary sm">PDF erneut senden</button>
+                <button className="btn primary sm" onClick={function(){ setPdfOpen(true); }}>PDF erneut senden</button>
                 <button className="btn sm">Follow-up jetzt</button>
                 <button className="btn sm" onClick={function(){ go("sent", q.id); }}>Vollansicht</button>
               </div>
@@ -850,6 +926,7 @@ const ActivityFeed = ({ q, go }) => {
           </>
         )}
       </div>
+      <PDFPreviewModal q={q} open={pdfOpen} onClose={function(){ setPdfOpen(false); }}/>
     </div>
   );
 };
