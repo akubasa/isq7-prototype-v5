@@ -721,6 +721,13 @@ const initialsOf = (q) => {
 };
 
 const PDFPreviewModal = ({ q, open, onClose }) => {
+  useEffect(function(){
+    if (!open) return;
+    const onKey = function(e){ if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return function(){ window.removeEventListener("keydown", onKey); };
+  }, [open, onClose]);
+
   if (!open || !q) return null;
   const proposalNum = "ANG-2026-" + String(((q.id.charCodeAt(0) * 137 + q.id.charCodeAt(1) * 41) % 9000) + 1000).slice(0,4);
   const totalAmt = total(q);
@@ -737,7 +744,7 @@ const PDFPreviewModal = ({ q, open, onClose }) => {
   const handleBgClick = function(e){ if (e.target === e.currentTarget) onClose(); };
 
   return (
-    <div className="modal-bg" onClick={handleBgClick}>
+    <div className="modal-bg has-pdf" onClick={handleBgClick}>
       <div className="modal pdf-modal" style={{maxHeight:"none"}}>
         <button className="pdf-modal-x" onClick={onClose} title="Schließen">×</button>
         <div className="pdf-paper">
@@ -922,8 +929,8 @@ const ActivityFeed = ({ q, go, updateInquiry }) => {
         {q.status === "priced" && (
           <>
             <FeedEvent avatar="AB" avatarKind="purple" name="Andreas Bauer" badge="REVIEW" badgeKind="parsed" time={`${t} (+3min)`}>
-              <div>Hat den AI-Vorschlag geöffnet. Preis von €{q.rate} auf <b>€{q.rate}</b> bestätigt.</div>
-              <div style={{marginTop:6, color:"var(--muted)"}}>Anpassungen: keine. PDF wird mit angepassten Werten neu generiert.</div>
+              <div>Hat den AI-Vorschlag geprüft und den Preis bei <b>€{q.rate}/Nacht</b> bestätigt.</div>
+              <div style={{marginTop:6, color:"var(--muted)"}}>Keine inhaltlichen Anpassungen - AI-Empfehlung passt zur Strategie für diesen Kunden.</div>
             </FeedEvent>
             <FeedEvent avatar="SY" avatarKind="sy" name="PDF aktualisiert" time={`${t} (+4min)`}>
               <div>Angebot <b>{proposalNum}.pdf</b> mit menschlich bestätigtem Preis. Bereit zum Versand.</div>
@@ -955,7 +962,17 @@ const ActivityFeed = ({ q, go, updateInquiry }) => {
               <div>Wartet auf Kundenantwort. Nächster automatischer Touch: {(q.followUps||[]).find(function(fu){ return !fu.done; })?.label || "—"}.</div>
               <div className="feed-buttons">
                 <button className="btn primary sm" onClick={function(){ setPdfOpen(true); }}>PDF erneut senden</button>
-                <button className="btn sm">Follow-up jetzt</button>
+                <button className="btn sm" onClick={function(){
+                  if (updateInquiry) {
+                    const now = new Date();
+                    const fuLabel = "Manuelle Erinnerung um " + now.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
+                    const updatedFollowUps = (q.followUps || []).map(function(fu){
+                      if (!fu.done && fu.label.includes("Erinnerung")) return Object.assign({}, fu, { done:true, label: fuLabel });
+                      return fu;
+                    });
+                    updateInquiry(q.id, { followUps: updatedFollowUps });
+                  }
+                }}>Follow-up jetzt</button>
                 <button className="btn sm" onClick={function(){ go("sent", q.id); }}>Vollansicht</button>
               </div>
             </div>
