@@ -713,6 +713,22 @@ const timeOf = (id) => {
   return (parts[parts.length-1] || "").trim();
 };
 
+// Parse "09:23" → [9, 23], add seconds, format back as "HH:MM:SS"
+const parseHM = function(hm){
+  var m = (hm || "").match(/(\d{1,2}):(\d{2})/);
+  if (!m) return [9, 23];
+  return [parseInt(m[1], 10), parseInt(m[2], 10)];
+};
+const timePlus = function(id, sec){
+  var hm = parseHM(timeOf(id));
+  var totalSec = hm[0] * 3600 + hm[1] * 60 + sec;
+  var h = Math.floor(totalSec / 3600) % 24;
+  var m = Math.floor((totalSec % 3600) / 60);
+  var s = totalSec % 60;
+  var pad = function(n){ return n < 10 ? "0" + n : "" + n; };
+  return pad(h) + ":" + pad(m) + ":" + pad(s);
+};
+
 const initialsOf = (q) => {
   var name = q.from || q.co;
   var parts = name.replace(/^Dr\.?\s+/i, "").split(/\s+/).filter(function(s){ return s.length > 0; });
@@ -1024,25 +1040,25 @@ const InquirySteps = ({ q, go }) => {
   const proposalNum = "ANG-2026-" + String(((q.id.charCodeAt(0) * 137 + q.id.charCodeAt(1) * 41) % 9000) + 1000).slice(0,4);
 
   const baseSteps = [
-    { id:"read",    agent:"EMAIL", badgeCls:"email", color:"var(--blue)", time:"09:23:00", sublabel:"Eingehend",
+    { id:"read",    agent:"EMAIL", badgeCls:"email", color:"var(--blue)", time:timePlus(q.id, 0), sublabel:"Eingehend",
       label:`Sprache ${q.language} + Intent „${q.intent}" erkannt (Confidence ${q.confidence})`, kind:"email-in" },
-    { id:"extract", agent:"ISQ7", badgeCls:"ai", color:"var(--green)", time:"09:23:02", sublabel:"Geparsed (2.3s)",
+    { id:"extract", agent:"ISQ7", badgeCls:"ai", color:"var(--green)", time:timePlus(q.id, 2), sublabel:"Geparsed (2.3s)",
       label:`${q.extract.length} strukturierte Felder extrahiert · Firma, Zimmer, Daten, F&B, Deadline.`, kind:"extract" },
   ];
   const replyStep = q.vip
-    ? { id:"reply", agent:"VIP", badgeCls:"vip", color:"var(--gold)", time:"09:23:03", sublabel:"Regel r3 aktiv",
+    ? { id:"reply", agent:"VIP", badgeCls:"vip", color:"var(--gold)", time:timePlus(q.id, 3), sublabel:"Regel r3 aktiv",
         label:"VIP erkannt - keine Auto-Reply gesendet. Entwurf liegt zur manuellen Freigabe bereit.", kind:"email-out-vip" }
-    : { id:"reply", agent:"ISQ7", badgeCls:"system", color:"var(--blue)", time:"09:23:47", sublabel:"Auto-Reply gesendet",
+    : { id:"reply", agent:"ISQ7", badgeCls:"system", color:"var(--blue)", time:timePlus(q.id, 47), sublabel:"Auto-Reply gesendet",
         label:"Bestätigungsmail in gleicher Sprache wie Anfrage versendet (47 Sekunden nach Eingang).", kind:"email-out" };
   const steps = [
     ...baseSteps, replyStep,
-    { id:"market", agent:"ISQ7", badgeCls:"pricing", color:"var(--gold)", time:"09:24:01", sublabel:"Markt-Analyse (8.7s)",
+    { id:"market", agent:"ISQ7", badgeCls:"pricing", color:"var(--gold)", time:timePlus(q.id, 61), sublabel:"Markt-Analyse (8.7s)",
       label:`Live-Raten von ${q.market.length} Wiener Mitbewerbern abgerufen.`, kind:"market" },
-    { id:"event",  agent:"ISQ7", badgeCls:"pdf", color:"var(--purple)", time:"09:24:10", sublabel:"Event erkannt",
+    { id:"event",  agent:"ISQ7", badgeCls:"pdf", color:"var(--purple)", time:timePlus(q.id, 70), sublabel:"Event erkannt",
       label:q.event.name, kind:"event" },
-    { id:"pdf",    agent:"ISQ7", badgeCls:"pdf", color:"var(--purple)", time:"09:24:11", sublabel:"Angebot bereit",
+    { id:"pdf",    agent:"ISQ7", badgeCls:"pdf", color:"var(--purple)", time:timePlus(q.id, 71), sublabel:"Angebot bereit",
       label:`${proposalNum}.pdf wartet auf Freigabe (${fmt(totalAmt)}).`, kind:null },
-    { id:"wait",   agent:"STATUS", badgeCls:"status", color:"var(--gold)", time:"09:24:12", sublabel:"Wartet auf Mensch",
+    { id:"wait",   agent:"STATUS", badgeCls:"status", color:"var(--gold)", time:timePlus(q.id, 72), sublabel:"Wartet auf Mensch",
       label:"Angebot in Review-Queue. Revenue Manager wurde benachrichtigt.", kind:null },
   ];
 
@@ -1086,7 +1102,7 @@ const StepDetail = ({ step, q, go }) => {
         <span className="l">Von</span><span>{q.from} &lt;{q.email}&gt;</span>
         <span className="l">An</span><span>groups@lakeview-vienna.at</span>
         <span className="l">Betreff</span><span>{q.emailSubject}</span>
-        <span className="l">Empfangen</span><span className="mono">Di 09:23 · via IMAP</span>
+        <span className="l">Empfangen</span><span className="mono">{timeOf(q.id)} · via IMAP</span>
       </div>
       <div className="email-body">{q.emailBody}</div>
       <div className="chips">
@@ -1110,7 +1126,7 @@ const StepDetail = ({ step, q, go }) => {
         <span className="l">Von</span><span>groups@lakeview-vienna.at</span>
         <span className="l">An</span><span>{q.email}</span>
         <span className="l">Betreff</span><span>Re: {q.emailSubject}</span>
-        <span className="l">Gesendet</span><span className="mono">Di 09:23 · +47 s nach Eingang</span>
+        <span className="l">Gesendet</span><span className="mono">{timePlus(q.id, 47)} · +47 s nach Eingang</span>
       </div>
       <div className="email-body">{`Sehr geehrte${q.from.includes("Herr")||q.from.match(/^(Markus|Andreas)/)?"r Herr":" Frau"} ${q.from.split(" ").slice(-1)[0]},
 
@@ -1380,7 +1396,7 @@ const Inquiry = ({ q, go, updateInquiry }) => {
       <button className="btn" onClick={() => go("inbox")} style={{marginBottom:24}}><Icon n="back" s={14}/> Zurück</button>
       <div className="eyebrow">{q.vip ? "VIP-Anfrage" : "Anfrage"} · {q.co}</div>
       <h1 className="title">{q.title.split("\n").map((l,i) => <Fragment key={i}>{l}{i===0?<br/>:null}</Fragment>)}</h1>
-      <p className="lede">Von {q.from} · empfangen 09:23 · in 4 Sekunden geparsed.</p>
+      <p className="lede">Von {q.from} · empfangen {timeOf(q.id)} · in 4 Sekunden geparsed.</p>
 
       {q.vip && (
         <div className="vip-banner">
