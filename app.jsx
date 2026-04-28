@@ -622,6 +622,7 @@ const App = () => {
     case "price":   S = active ? <Pricing q={active} go={go} updateInquiry={updateInquiry}/> : <Inbox inquiries={inquiries} go={go} updateInquiry={updateInquiry}/>; break;
     case "sent":    S = active ? <Sent q={active} go={go}/> : <Inbox inquiries={inquiries} go={go} updateInquiry={updateInquiry}/>; break;
     case "stats":   S = <Stats/>; break;
+    case "rates":   S = <RateMonitor/>; break;
     case "config":  S = <Config/>; break;
     case "archive": S = activeArchiveId ? <ArchiveDetail id={activeArchiveId} go={go} setActiveArchiveId={setActiveArchiveId}/> : <Archive go={go} setActiveArchiveId={setActiveArchiveId}/>; break;
     default:        S = <Inbox inquiries={inquiries} go={go}/>;
@@ -663,6 +664,9 @@ const Nav = ({ step, setStep, theme, setTheme, activeInquiry, hasSelection }) =>
     <div style={{display:"flex",alignItems:"center",gap:6}}>
       <button className={`tgl ${step==="archive"?"active":""}`} onClick={() => setStep("archive")} title="Archiv">
         <Icon n="arch" s={15}/>
+      </button>
+      <button className={`tgl ${step==="rates"?"active":""}`} onClick={() => setStep("rates")} title="Markt-Monitor">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="20" x2="6" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/><line x1="3" y1="20" x2="21" y2="20"/></svg>
       </button>
       <button className={`tgl ${step==="stats"?"active":""}`} onClick={() => setStep("stats")} title="Analytics">
         <Icon n="chart" s={15}/>
@@ -1918,37 +1922,269 @@ const ArchiveDetail = ({ id, go, setActiveArchiveId }) => {
 };
 
 // ---------- 5. Stats ----------
-const Stats = () => (
-  <div className="wrap enter">
-    <div className="eyebrow">Letzte 30 Tage</div>
-    <h1 className="title">Es funktioniert.</h1>
-    <p className="lede">31 Gruppen-Buchungen gewonnen. Antwortzeit unter 30 Sekunden im Schnitt.</p>
+const Stats = () => {
+  const kpis = [
+    { l:"Conversion",          v:"12,4 %",   d:"+ 2,1 pp",     dCls:"pos", vColor:"var(--green)" },
+    { l:"Ø Umsatz / Anfrage",  v:"€ 8.420",  d:"+ € 640",      dCls:"pos" },
+    { l:"Buchungen gewonnen",  v:"31",       d:"von 247 Anfragen" },
+    { l:"Ø Antwortzeit",       v:"28 s",     d:"automatisch geparsed", dCls:"pos", vColor:"var(--green)" },
+    { l:"AI-Autonomie",        v:"43 %",     d:"voll-autonome Zyklen", vColor:"var(--gold)" },
+  ];
 
-    <div className="stats4" style={{marginTop:40}}>
-      <div className="card stat"><div className="l">Conversion</div><div className="v">12,4 %</div><div className="d pos">+ 2,1 pp</div></div>
-      <div className="card stat"><div className="l">Ø Umsatz / Anfrage</div><div className="v">€ 8.420</div><div className="d pos">+ € 640</div></div>
-      <div className="card stat"><div className="l">Buchungen gewonnen</div><div className="v">31</div><div className="d">von 247 Anfragen</div></div>
-    </div>
+  const funnelSteps = [
+    { l:"Empfangen", n:247, w:100, col:"var(--blue)" },
+    { l:"Geparsed",  n:247, w:100, col:"var(--green)" },
+    { l:"Bepreist",  n:247, w:100, col:"var(--gold)" },
+    { l:"Gesendet",  n:198, w:80,  col:"var(--purple)" },
+    { l:"Gewonnen",  n:31,  w:13,  col:"var(--green)" },
+  ];
 
-    <div className="card" style={{marginTop:24}}>
-      <div className="section-head"><h3>Funnel</h3><span className="note">22. März → 22. April</span></div>
-      {[
-        { l:"Empfangen", n:247, w:100 },
-        { l:"Bepreist",  n:247, w:100 },
-        { l:"Gesendet",  n:198, w:80  },
-        { l:"Gewonnen",  n:31,  w:13, won:true },
-      ].map(f => (
-        <div key={f.l} className="comp">
-          <span className="name" style={{minWidth:110}}>{f.l}</span>
-          <span className="bar" style={{flex:3}}>
-            <span className="f" style={{width:`${f.w}%`, background: f.won ? "var(--green)" : "var(--gold)"}}/>
-          </span>
-          <span className="price">{f.n}</span>
+  const segments = [
+    { seg:"Corp MICE",         pct:47, rev:"€ 142K", col:"var(--blue)" },
+    { seg:"Galas & Events",    pct:32, rev:"€ 85K",  col:"var(--gold)" },
+    { seg:"Trainings & Klausur", pct:21, rev:"€ 37K", col:"var(--purple)" },
+  ];
+
+  const suggestions = [
+    { tt:"Late Check-out auto-anbieten", d:"73% der Corp-MICE-Anfragen kommen mit Bedarf nach 14:00 Check-out. Auto-Empfehlung würde Conversion um geschätzt +3% steigern.", col:"var(--green)" },
+    { tt:"F&B-Pakete dynamischer pricen", d:"Lunch-Buffet-Preis seit 18 Monaten unverändert. Markt liegt 12-18% darüber. €4-6/Pax mehr drin.", col:"var(--gold)" },
+    { tt:"Approval-Flow für Corp <€10K straffen", d:"43% der Corp-Anfragen sind unter €10K und folgen dem gleichen Muster. Vollautonom freigeben (Regel r2 erweitern).", col:"var(--blue)" },
+    { tt:"OMV-Stammkunden-Rabatt prüfen", d:"OMV hat 8 Buchungen in 14 Monaten. Aktueller Rabatt 5%. Bei dieser Frequenz sind 8-10% Stammkunden-Rate marktüblich.", col:"var(--purple)" },
+    { tt:"Tech-Pauschale separat ausweisen", d:"Tech (Beamer, WLAN, Mikro) ist in 90% der Anfragen drin, aber nicht im Angebot sichtbar. Als USP dokumentieren erhöht Wahrnehmung der Wertigkeit.", col:"var(--red)" },
+  ];
+
+  const handlers = [
+    { name:"Andreas Bauer", cnt:18, col:"var(--gold)" },
+    { name:"Sarah Klein",   cnt:7,  col:"var(--blue)" },
+    { name:"AI · Auto",     cnt:13, col:"var(--green)" },
+  ];
+
+  return (
+    <div className="wrap enter" style={{maxWidth:960}}>
+      <div className="eyebrow">Letzte 30 Tage · Analytics</div>
+      <h1 className="title">Es funktioniert.</h1>
+      <p className="lede">31 Gruppen-Buchungen gewonnen. Antwortzeit unter 30 Sekunden im Schnitt. 43% der Anfragen vollautonom durchgelaufen.</p>
+
+      <div style={{display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:12, marginTop:32}}>
+        {kpis.map(function(k){
+          return (
+            <div key={k.l} className="card stat" style={{padding:18}}>
+              <div className="l">{k.l}</div>
+              <div className="v" style={k.vColor ? {color: k.vColor} : {}}>{k.v}</div>
+              <div className={"d" + (k.dCls === "pos" ? " pos" : "")}>{k.d}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="card" style={{marginTop:24}}>
+        <div className="section-head"><h3>Funnel</h3><span className="note">22. März → 22. April</span></div>
+        {funnelSteps.map(function(f, i){
+          return (
+            <div key={f.l} style={{marginBottom: i < funnelSteps.length-1 ? 14 : 0}}>
+              <div style={{display:"flex", justifyContent:"space-between", marginBottom:6}}>
+                <span style={{fontSize:14, fontWeight:600}}>{f.l}</span>
+                <span className="mono" style={{fontSize:13, color:"var(--muted)"}}>{f.n}</span>
+              </div>
+              <div style={{height:10, background:"var(--input)", borderRadius:5, overflow:"hidden"}}>
+                <div style={{width: f.w + "%", height:"100%", background:f.col, borderRadius:5, transition:"width .8s cubic-bezier(.2,.8,.2,1)"}}/>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginTop:24}}>
+        <div className="card">
+          <div className="section-head"><h3>Top-Segmente</h3><span className="note">Umsatz-Anteil</span></div>
+          {segments.map(function(s, i){
+            return (
+              <div key={s.seg} style={{marginBottom: i < segments.length-1 ? 14 : 0}}>
+                <div style={{display:"flex", justifyContent:"space-between", marginBottom:6}}>
+                  <span style={{fontSize:14, fontWeight:600}}>{s.seg}</span>
+                  <span className="mono" style={{fontSize:13, color:"var(--muted)"}}>{s.pct} % · {s.rev}</span>
+                </div>
+                <div style={{height:8, background:"var(--input)", borderRadius:4, overflow:"hidden"}}>
+                  <div style={{width: s.pct + "%", height:"100%", background: s.col}}/>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      ))}
+
+        <div className="card">
+          <div className="section-head"><h3>Bearbeitet von</h3><span className="note">Anfragen-Anteil</span></div>
+          {handlers.map(function(h){
+            return (
+              <div key={h.name} className="kv">
+                <span className="k">{h.name}</span>
+                <span className="v" style={{color: h.col}}>{h.cnt}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="section-head" style={{marginTop:32, marginBottom:14}}>
+        <h3>AI-Empfehlungen</h3>
+        <span className="note">basierend auf 30-Tage-Daten</span>
+      </div>
+      {suggestions.map(function(s, i){
+        return (
+          <div key={i} className="card" style={{marginTop: i === 0 ? 0 : 8, padding:"16px 18px", borderLeft:"3px solid " + s.col}}>
+            <div style={{fontSize:14, fontWeight:700, marginBottom:4}}>{s.tt}</div>
+            <div style={{fontSize:13, color:"var(--muted)", lineHeight:1.55}}>{s.d}</div>
+          </div>
+        );
+      })}
     </div>
-  </div>
-);
+  );
+};
+
+// ---------- Markt-Monitor (Wettbewerber + Events + Preis-Korridor) ----------
+const DEFAULT_COMPETITORS = [
+  { id:"c1", n:"Novum Hotel Kavalier",      stars:3, dist:"4.2 km", base:95,  today:98,  w7:-2,  w30:+4,  col:"var(--blue)" },
+  { id:"c2", n:"the niu Franz (Holiday Inn)", stars:4, dist:"2.1 km", base:109, today:115, w7:+4,  w30:+8,  col:"var(--green)" },
+  { id:"c3", n:"Mercure Vienna City Center", stars:4, dist:"1.8 km", base:115, today:119, w7:+3,  w30:+5,  col:"var(--gold)" },
+  { id:"c4", n:"NH Wien City",               stars:4, dist:"0.9 km", base:125, today:135, w7:+12, w30:+18, col:"var(--purple)" },
+  { id:"c5", n:"Austria Trend Hotel Anatol", stars:4, dist:"2.6 km", base:119, today:129, w7:+8,  w30:+11, col:"var(--red)" },
+];
+
+const UPCOMING_EVENTS = [
+  { date:"13.-16. April",       name:"Vienna Medical Congress",      pax:"700.000+", impact:"+15-25%", type:"Messe/Kongress", col:"var(--red)",    days:2 },
+  { date:"02.-05. Mai",         name:"Coffee & Bakery Expo",         pax:"25.000",    impact:"+5-10%",  type:"B2B-Messe",      col:"var(--blue)",   days:10 },
+  { date:"15. Mai - 15. Juni",  name:"Wiener Festwochen",            pax:"1M+",       impact:"+20-35%", type:"Kultur",         col:"var(--gold)",   days:24 },
+  { date:"02.-05. Juni",        name:"Ars Electronica Preview Week", pax:"40.000",    impact:"+10-15%", type:"Kultur/Tech",    col:"var(--purple)", days:42 },
+  { date:"01.-06. Juli",        name:"ImPulsTanz Festival",          pax:"80.000",    impact:"+15%",    type:"Kultur",         col:"var(--red)",    days:71 },
+  { date:"30.12.-02.01.",       name:"Neujahrskonzert / Silvester",  pax:"500.000+",  impact:"+60-80%", type:"Peak-Event",     col:"var(--red)",    days:253 },
+];
+
+const RateMonitor = () => {
+  const [range, setRange] = useState("today");
+  const yours = 119;
+  const comps = DEFAULT_COMPETITORS;
+  const avg = Math.round(comps.reduce(function(s, c){ return s + c.today; }, 0) / comps.length);
+  const maxP = Math.max.apply(null, comps.map(function(c){ return c.today; }).concat([yours])) + 5;
+  const positionPct = Math.round(((yours - avg) / avg) * 1000) / 10;
+
+  const stats = [
+    { l:"Deine Rate",         v:"€ " + yours, color:"var(--gold)" },
+    { l:"Markt Ø heute",      v:"€ " + avg,   color:"var(--blue)" },
+    { l:"Position",           v:(positionPct > 0 ? "+" : "") + positionPct + "%", color: positionPct > 0 ? "var(--green)" : "var(--red)", d:"vs Markt-Ø" },
+    { l:"Trend 7 Tage",       v:"+ 4,2 %",    color:"var(--green)", d:"Markt zieht an" },
+    { l:"Auslastung",         v:"82 %",       color:"var(--gold)",  d:"+ 8 ggü. Vorwoche" },
+  ];
+
+  const ranges = [["today","Heute"], ["w7","7 Tage"], ["w30","30 Tage"]];
+
+  return (
+    <div className="wrap enter" style={{maxWidth:1080}}>
+      <div className="eyebrow">Markt-Monitor · Live Wien</div>
+      <h1 className="title">Der Markt um dich herum.</h1>
+      <p className="lede">Wo stehen deine Mitbewerber, welche Events treiben die Nachfrage, und wo hast du Spielraum?</p>
+
+      <div style={{display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:12, marginTop:32}}>
+        {stats.map(function(s){
+          return (
+            <div key={s.l} className="card stat" style={{padding:18}}>
+              <div className="l">{s.l}</div>
+              <div className="v" style={{color: s.color}}>{s.v}</div>
+              {s.d && <div className="d">{s.d}</div>}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{display:"flex", gap:8, marginTop:24, marginBottom:14}}>
+        {ranges.map(function(r){
+          return (
+            <button key={r[0]} className={"filter-pill" + (range === r[0] ? " active" : "")} onClick={function(){ setRange(r[0]); }}>{r[1]}</button>
+          );
+        })}
+      </div>
+
+      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:16}}>
+        <div>
+          <div className="card">
+            <div className="section-head">
+              <h3>{range === "today" ? "Heute" : (range === "w7" ? "Letzte 7 Tage" : "Letzte 30 Tage")}</h3>
+              <span className="note">aktualisiert vor 2 Min</span>
+            </div>
+            {comps.map(function(c){
+              const trend = range === "today" ? null : (range === "w7" ? c.w7 : c.w30);
+              return (
+                <div key={c.id} style={{display:"grid", gridTemplateColumns:"1.4fr 2fr auto auto", gap:12, alignItems:"center", padding:"12px 0", borderBottom:"1px dashed var(--panel-border)"}}>
+                  <div>
+                    <div style={{fontSize:14, fontWeight:600}}>{c.n}</div>
+                    <div style={{fontSize:11, color:"var(--dim)", marginTop:2}}>{c.stars}★ · {c.dist}</div>
+                  </div>
+                  <div style={{height:6, background:"var(--input)", borderRadius:3, overflow:"hidden"}}>
+                    <div style={{width: ((c.today / maxP) * 100) + "%", height:"100%", background: c.col, borderRadius:3, transition:"width .8s cubic-bezier(.2,.8,.2,1)"}}/>
+                  </div>
+                  {trend !== null && (
+                    <span className="mono" style={{fontSize:12, color: trend > 0 ? "var(--red)" : "var(--green)", minWidth:54, textAlign:"right"}}>
+                      {trend > 0 ? "▲" : "▼"} {trend > 0 ? "+" : ""}{trend}€
+                    </span>
+                  )}
+                  <span className="mono" style={{fontSize:14, fontWeight:600, minWidth:60, textAlign:"right"}}>{fmt(c.today)}</span>
+                </div>
+              );
+            })}
+            <div style={{display:"grid", gridTemplateColumns:"1.4fr 2fr auto auto", gap:12, alignItems:"center", padding:"14px 0 4px", marginTop:4}}>
+              <div>
+                <div style={{fontSize:14, fontWeight:700, color:"var(--gold)"}}>The Lakeview (du) ●</div>
+                <div style={{fontSize:11, color:"var(--gold)", marginTop:2}}>Standard · Corp-Rate</div>
+              </div>
+              <div style={{height:6, background:"var(--input)", borderRadius:3, overflow:"hidden"}}>
+                <div style={{width: ((yours / maxP) * 100) + "%", height:"100%", background:"var(--gold)", borderRadius:3}}/>
+              </div>
+              {range !== "today" && <span className="mono" style={{fontSize:12, color:"var(--green)", minWidth:54, textAlign:"right"}}>= stabil</span>}
+              <span className="mono" style={{fontSize:14, fontWeight:700, color:"var(--gold)", minWidth:60, textAlign:"right"}}>{fmt(yours)}</span>
+            </div>
+          </div>
+
+          <div className="ai-reason" style={{marginTop:18}}>
+            <div className="ai-reason-head"><Icon n="spark" s={13}/> AI-Insight</div>
+            <div className="ai-reason-body">
+              NH Wien City zieht stark an (<span className="mono" style={{color:"var(--red)"}}>+18 €</span> in 30 Tagen) - sie reagieren aggressiv auf den Medical Congress und die Festwochen. Dein Preis bleibt stabil, was Corp-Kunden (OMV, Siemens) als Stability-Story lesen. <b>Empfehlung:</b> für Leisure-Anfragen darfst du +8-12 % aggressiv nachziehen, Corp-Raten hältst du. 6 Stammkunden haben in den letzten 90 Tagen gebucht - die Retention-Strategie läuft.
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="card">
+            <div className="section-head"><h3>Anstehende Events</h3><span className="note">nächste 9 Monate</span></div>
+            {UPCOMING_EVENTS.map(function(e, i){
+              return (
+                <div key={i} style={{display:"grid", gridTemplateColumns:"110px 1fr auto", gap:12, padding:"12px 0", borderBottom: i < UPCOMING_EVENTS.length-1 ? "1px dashed var(--panel-border)" : "0", alignItems:"center", borderLeft:"3px solid " + e.col, paddingLeft:14, marginLeft:-14}}>
+                  <div>
+                    <div style={{fontSize:13, fontWeight:600}}>{e.date}</div>
+                    <div style={{fontSize:10, color:"var(--dim)", marginTop:2, fontFamily:"var(--font-m)"}}>in {e.days} Tagen</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize:14, fontWeight:600}}>{e.name}</div>
+                    <div style={{fontSize:12, color:"var(--muted)", marginTop:2}}>{e.type} · {e.pax} Besucher</div>
+                  </div>
+                  <div className="mono" style={{fontSize:14, fontWeight:700, color: e.col, minWidth:70, textAlign:"right"}}>{e.impact}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="card" style={{marginTop:16}}>
+            <div className="section-head"><h3>Preis-Korridor</h3><span className="note">Wien · Standard-Zimmer</span></div>
+            <div className="kv"><span className="k">Floor (Mindestpreis)</span><span className="v">€ 89</span></div>
+            <div className="kv"><span className="k">Corp-Rate (z.B. OMV)</span><span className="v" style={{color:"var(--gold)"}}>€ 99-119</span></div>
+            <div className="kv"><span className="k">Standard BAR</span><span className="v">€ 135-149</span></div>
+            <div className="kv"><span className="k">Event-Surge</span><span className="v">€ 155-195</span></div>
+            <div className="kv"><span className="k">Ceiling (Max ohne Peak)</span><span className="v">€ 195</span></div>
+            <div className="kv"><span className="k">Peak (Neujahrskonzert)</span><span className="v" style={{color:"var(--red)"}}>€ 310+</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ---------- 6. Settings (Freitext + Test + Versions) ----------
 const DEFAULT_RULES = [
