@@ -618,7 +618,7 @@ const App = () => {
   let S;
   switch (step) {
     case "inbox":   S = <Inbox inquiries={inquiries} go={go} updateInquiry={updateInquiry}/>; break;
-    case "inquiry": S = active ? <Inquiry q={active} go={go}/> : <Inbox inquiries={inquiries} go={go} updateInquiry={updateInquiry}/>; break;
+    case "inquiry": S = active ? <Inquiry q={active} go={go} updateInquiry={updateInquiry}/> : <Inbox inquiries={inquiries} go={go} updateInquiry={updateInquiry}/>; break;
     case "price":   S = active ? <Pricing q={active} go={go} updateInquiry={updateInquiry}/> : <Inbox inquiries={inquiries} go={go} updateInquiry={updateInquiry}/>; break;
     case "sent":    S = active ? <Sent q={active} go={go}/> : <Inbox inquiries={inquiries} go={go} updateInquiry={updateInquiry}/>; break;
     case "stats":   S = <Stats/>; break;
@@ -844,27 +844,6 @@ const ActivityFeed = ({ q, go, updateInquiry }) => {
   const headPill = HEAD_PILL[q.status] || HEAD_PILL.new;
   const titleSub = q.summary.split("·").slice(0,2).join(" ·").trim();
 
-  const approveAndSend = function(){
-    if (updateInquiry) {
-      const now = new Date();
-      const sentAt = "Heute · " + now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-      updateInquiry(q.id, {
-        status: "sent",
-        tag: "Gesendet",
-        tone: "green",
-        sentAt: sentAt,
-        sentBy: "Andreas Bauer",
-        followUps: q.followUps || [
-          { at:"T+0", label:"Angebot per E-Response gesendet", done:true },
-          { at:"T+4h", label:"Öffnungsbestätigung erwartet", done:false },
-          { at:"T+24h", label:"Automatische Erinnerung", done:false },
-          { at:"T+72h", label:"Eskalation an Sales-Manager", done:false },
-        ],
-      });
-    }
-    go("sent", q.id);
-  };
-
   return (
     <div className="dash-feed">
       <header className="dash-feed-head">
@@ -919,7 +898,7 @@ const ActivityFeed = ({ q, go, updateInquiry }) => {
             <div>Angebot <b>{proposalNum}.pdf</b> erstellt (3 Seiten). Bereit zur Freigabe.</div>
             <div className="feed-buttons">
               <button className="btn primary sm" onClick={function(){ setPdfOpen(true); }}>PDF Vorschau</button>
-              <button className="btn green sm" onClick={approveAndSend}>Freigeben & Senden</button>
+              <button className="btn green sm" onClick={function(){ go("inquiry", q.id); }}>Freigeben & Senden →</button>
               <button className="btn sm" onClick={function(){ go("price", q.id); }}>Preis anpassen</button>
             </div>
           </FeedEvent>
@@ -936,7 +915,7 @@ const ActivityFeed = ({ q, go, updateInquiry }) => {
               <div>Angebot <b>{proposalNum}.pdf</b> mit menschlich bestätigtem Preis. Bereit zum Versand.</div>
               <div className="feed-buttons">
                 <button className="btn primary sm" onClick={function(){ setPdfOpen(true); }}>PDF Vorschau</button>
-                <button className="btn green sm" onClick={approveAndSend}>Freigeben & Senden</button>
+                <button className="btn green sm" onClick={function(){ go("inquiry", q.id); }}>Freigeben & Senden →</button>
                 <button className="btn sm" onClick={function(){ go("price", q.id); }}>Erneut anpassen</button>
               </div>
             </FeedEvent>
@@ -1038,41 +1017,61 @@ const Inbox = ({ inquiries, go, updateInquiry }) => {
 };
 
 // ---------- 2. Inquiry detail ----------
+// V4-style vertical timeline with expandable cards
 const InquirySteps = ({ q, go }) => {
   const [open, setOpen] = useState(null);
+  const totalAmt = total(q);
+  const proposalNum = "ANG-2026-" + String(((q.id.charCodeAt(0) * 137 + q.id.charCodeAt(1) * 41) % 9000) + 1000).slice(0,4);
+
   const baseSteps = [
-    { id:"read",    time:"09:23", done:true,  label:`E-Mail gelesen · ${q.language} + ${q.intent} erkannt`, kind:"email-in" },
-    { id:"extract", time:"09:23", done:true,  label:"Strukturierte Daten extrahiert", kind:"extract" },
+    { id:"read",    agent:"EMAIL", badgeCls:"email", color:"var(--blue)", time:"09:23:00", sublabel:"Eingehend",
+      label:`Sprache ${q.language} + Intent „${q.intent}" erkannt (Confidence ${q.confidence})`, kind:"email-in" },
+    { id:"extract", agent:"ISQ7", badgeCls:"ai", color:"var(--green)", time:"09:23:02", sublabel:"Geparsed (2.3s)",
+      label:`${q.extract.length} strukturierte Felder extrahiert · Firma, Zimmer, Daten, F&B, Deadline.`, kind:"extract" },
   ];
   const replyStep = q.vip
-    ? { id:"reply", time:"09:23", done:false, label:"VIP erkannt (Regel r3) — KEINE Auto-Reply. Entwurf wartet auf dich.", kind:"email-out-vip" }
-    : { id:"reply", time:"09:23", done:true,  label:"Auto-Reply in gleicher Sprache gesendet", kind:"email-out" };
+    ? { id:"reply", agent:"VIP", badgeCls:"vip", color:"var(--gold)", time:"09:23:03", sublabel:"Regel r3 aktiv",
+        label:"VIP erkannt - keine Auto-Reply gesendet. Entwurf liegt zur manuellen Freigabe bereit.", kind:"email-out-vip" }
+    : { id:"reply", agent:"ISQ7", badgeCls:"system", color:"var(--blue)", time:"09:23:47", sublabel:"Auto-Reply gesendet",
+        label:"Bestätigungsmail in gleicher Sprache wie Anfrage versendet (47 Sekunden nach Eingang).", kind:"email-out" };
   const steps = [
-    ...baseSteps,
-    replyStep,
-    { id:"market",  time:"09:24", done:true,  label:"Live-Raten von 4 Wiener Mitbewerbern geholt", kind:"market" },
-    { id:"event",   time:"09:24", done:true,  label:`${q.event.name}`, kind:"event" },
+    ...baseSteps, replyStep,
+    { id:"market", agent:"ISQ7", badgeCls:"pricing", color:"var(--gold)", time:"09:24:01", sublabel:"Markt-Analyse (8.7s)",
+      label:`Live-Raten von ${q.market.length} Wiener Mitbewerbern abgerufen.`, kind:"market" },
+    { id:"event",  agent:"ISQ7", badgeCls:"pdf", color:"var(--purple)", time:"09:24:10", sublabel:"Event erkannt",
+      label:q.event.name, kind:"event" },
+    { id:"pdf",    agent:"ISQ7", badgeCls:"pdf", color:"var(--purple)", time:"09:24:11", sublabel:"Angebot bereit",
+      label:`${proposalNum}.pdf wartet auf Freigabe (${fmt(totalAmt)}).`, kind:null },
+    { id:"wait",   agent:"STATUS", badgeCls:"status", color:"var(--gold)", time:"09:24:12", sublabel:"Wartet auf Mensch",
+      label:"Angebot in Review-Queue. Revenue Manager wurde benachrichtigt.", kind:null },
   ];
+
   return (
-    <div className="steps-v">
-      {steps.map((s, i) => {
+    <div className="vtl">
+      {steps.map(function(s, i){
         const isOpen = open === s.id;
+        const delay = (0.05 + i * 0.08) + "s";
+        const isClickable = !!s.kind;
         return (
-          <Fragment key={s.id}>
-            <div className={`sv ${s.done ? "done" : ""}`} onClick={()=>setOpen(isOpen ? null : s.id)}>
-              <div className="c">{s.done ? <Icon n="check" s={12}/> : i+1}</div>
-              <div>{s.label}</div>
-              <span className="mono" style={{color:"var(--dim)",fontSize:12,display:"flex",alignItems:"center",gap:8}}>
-                {s.time}
-                <span style={{display:"inline-block",transition:"transform .2s",transform:isOpen?"rotate(90deg)":"rotate(0)"}}>›</span>
-              </span>
-            </div>
-            {isOpen && (
-              <div className="sv-exp">
-                <StepDetail step={s} q={q} go={go}/>
+          <div key={s.id} className="vtl-event" style={{animationDelay: delay}}>
+            <div className="vtl-time">{s.time}</div>
+            <div className="vtl-spine" style={{color: s.color, background: s.color}}/>
+            <div className={"vtl-card" + (isOpen ? " expanded" : "")}
+                 onClick={function(){ if (isClickable) setOpen(isOpen ? null : s.id); }}
+                 style={isClickable ? {} : {cursor:"default"}}>
+              {isClickable && <span className="vtl-expand-icon">›</span>}
+              <div className="vtl-card-head">
+                <span className={"agent-badge " + s.badgeCls}>{s.agent}</span>
+                <span className="vtl-card-sublabel">{s.sublabel}</span>
               </div>
-            )}
-          </Fragment>
+              <div className="vtl-card-body">{s.label}</div>
+              {isOpen && isClickable && (
+                <div className="vtl-card-detail fade-in">
+                  <StepDetail step={s} q={q} go={go}/>
+                </div>
+              )}
+            </div>
+          </div>
         );
       })}
     </div>
@@ -1348,45 +1347,94 @@ const CustomerMemory = ({ q }) => {
   );
 };
 
-const Inquiry = ({ q, go }) => (
-  <div className="wrap enter" style={{maxWidth:720}}>
-    <button className="btn" onClick={() => go("inbox")} style={{marginBottom:24}}><Icon n="back" s={14}/> Zurück</button>
-    <div className="eyebrow">{q.vip ? "VIP-Anfrage" : "Anfrage"} · {q.co}</div>
-    <h1 className="title">{q.title.split("\n").map((l,i) => <Fragment key={i}>{l}{i===0?<br/>:null}</Fragment>)}</h1>
-    <p className="lede">Von {q.from} · empfangen 09:23 · in 4 Sekunden geparsed.</p>
+const Inquiry = ({ q, go, updateInquiry }) => {
+  const [sending, setSending] = useState(false);
 
-    {q.vip && (
-      <div className="vip-banner">
-        <div className="vip-dot"/>
-        <div>
-          <div style={{fontWeight:600,fontSize:15,marginBottom:2}}>VIP-Regel (r3) hat gegriffen</div>
-          <div style={{color:"var(--muted)",fontSize:13,lineHeight:1.55}}>Die Philharmoniker sind explizit als VIP hinterlegt. Keine Auto-Reply. Die AI hat einen Entwurf vorbereitet — <b>du</b> entscheidest, was rausgeht.</div>
+  const approveAndSend = function(){
+    if (sending || q.vip || q.status === "sent") return;
+    setSending(true);
+    setTimeout(function(){
+      if (updateInquiry) {
+        const now = new Date();
+        const sentAt = "Heute · " + now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+        updateInquiry(q.id, {
+          status: "sent",
+          tag: "Gesendet",
+          tone: "green",
+          sentAt: sentAt,
+          sentBy: "Andreas Bauer",
+          followUps: q.followUps || [
+            { at:"T+0", label:"Angebot per E-Response gesendet", done:true },
+            { at:"T+4h", label:"Öffnungsbestätigung erwartet", done:false },
+            { at:"T+24h", label:"Automatische Erinnerung", done:false },
+            { at:"T+72h", label:"Eskalation an Sales-Manager", done:false },
+          ],
+        });
+      }
+      go("sent", q.id);
+    }, 600);
+  };
+
+  return (
+    <div className="wrap enter" style={{maxWidth:720}}>
+      <button className="btn" onClick={() => go("inbox")} style={{marginBottom:24}}><Icon n="back" s={14}/> Zurück</button>
+      <div className="eyebrow">{q.vip ? "VIP-Anfrage" : "Anfrage"} · {q.co}</div>
+      <h1 className="title">{q.title.split("\n").map((l,i) => <Fragment key={i}>{l}{i===0?<br/>:null}</Fragment>)}</h1>
+      <p className="lede">Von {q.from} · empfangen 09:23 · in 4 Sekunden geparsed.</p>
+
+      {q.vip && (
+        <div className="vip-banner">
+          <div className="vip-dot"/>
+          <div>
+            <div style={{fontWeight:600,fontSize:15,marginBottom:2}}>VIP-Regel (r3) hat gegriffen</div>
+            <div style={{color:"var(--muted)",fontSize:13,lineHeight:1.55}}>Die Philharmoniker sind explizit als VIP hinterlegt. Keine Auto-Reply. Die AI hat einen Entwurf vorbereitet - <b>du</b> entscheidest, was rausgeht.</div>
+          </div>
         </div>
+      )}
+
+      <div className="card" style={{marginTop: q.vip ? 12 : 40}}>
+        <div className="section-head">
+          <h3>Was die AI gemacht hat</h3>
+          <span className="note">in 47 Sekunden · klick einen Schritt zum Aufklappen</span>
+        </div>
+        <InquirySteps q={q} go={go}/>
       </div>
-    )}
 
-    <div className="card" style={{marginTop: q.vip ? 12 : 40}}>
-      <div className="section-head">
-        <h3>Was die AI gemacht hat</h3>
-        <span className="note">in 47 Sekunden</span>
+      {q.vip && <VIPDraftReply q={q}/>}
+
+      <CustomerMemory q={q}/>
+
+      <div className="card" style={{marginTop:12, textAlign:"center", padding:40}}>
+        <div className="eyebrow">Empfohlener Gesamtpreis</div>
+        <div className="hero-num">{fmt(total(q))}</div>
+        <div className="hero-sub">{fmt(q.rate)} {q.rateHint}</div>
+
+        {!q.vip && q.status !== "sent" && (
+          <div style={{display:"flex", gap:10, marginTop:28, justifyContent:"center", flexWrap:"wrap"}}>
+            <button className="btn green big" onClick={approveAndSend} disabled={sending}>
+              {sending ? <>Sende ...</> : <><Icon n="check" s={15}/> Jetzt freigeben & senden</>}
+            </button>
+            <button className="btn big" onClick={() => go("price", q.id)} disabled={sending}>
+              <Icon n="spark" s={14}/> Preis anpassen
+            </button>
+          </div>
+        )}
+
+        {q.status === "sent" && (
+          <div style={{marginTop:28, color:"var(--green)", fontFamily:"var(--font-m)", fontSize:13, letterSpacing:".08em", textTransform:"uppercase"}}>
+            <Icon n="check" s={14}/> Bereits gesendet · {q.sentAt || "vor kurzem"}
+          </div>
+        )}
+
+        {q.vip && (
+          <div style={{marginTop:28, color:"var(--gold)", fontFamily:"var(--font-m)", fontSize:13, letterSpacing:".08em", textTransform:"uppercase"}}>
+            VIP - Entwurf wartet oben
+          </div>
+        )}
       </div>
-      <InquirySteps q={q} go={go}/>
     </div>
-
-    {q.vip && <VIPDraftReply q={q}/>}
-
-    <CustomerMemory q={q}/>
-
-    <div className="card" style={{marginTop:12, textAlign:"center", padding:40}}>
-      <div className="eyebrow">Empfohlener Gesamtpreis</div>
-      <div className="hero-num">{fmt(total(q))}</div>
-      <div className="hero-sub">{fmt(q.rate)} {q.rateHint}</div>
-      <button className="btn primary big" style={{marginTop:28}} onClick={() => go("price", q.id)}>
-        Angebot prüfen <Icon n="arr" s={14}/>
-      </button>
-    </div>
-  </div>
-);
+  );
+};
 
 // ---------- 3. Pricing with AI-Adjust ----------
 const Pricing = ({ q, go, updateInquiry }) => {
